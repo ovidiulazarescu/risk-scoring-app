@@ -1,8 +1,9 @@
 import { useState, FormEvent } from "react";
+import ScoreGauge, { RiskBand } from "./ScoreGauge";
 
 type ScoreResponse = {
   score: number;
-  risk_band: "low" | "medium" | "high";
+  risk_band: RiskBand;
 };
 
 export default function App() {
@@ -41,7 +42,24 @@ export default function App() {
 
   return (
     <div className="card">
-      <h1>Risk Scoring</h1>
+      <header className="header">
+        <span className="header-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" strokeLinejoin="round" />
+            <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <div>
+          <h1>Risk Scoring</h1>
+          <p className="subtitle">Credit risk assessment</p>
+        </div>
+      </header>
+
+      <div className="info">
+        Scores run from <strong>300</strong> to <strong>850</strong>. Lower credit utilization
+        and debt-to-income raise the score; stronger payment history raises it further.
+      </div>
+
       <form onSubmit={handleSubmit}>
         <label htmlFor="credit_utilization">Credit utilization (0.0 - 1.0)</label>
         <input
@@ -80,16 +98,35 @@ export default function App() {
         />
 
         <button type="submit" disabled={loading}>
-          {loading ? "Scoring..." : "Get score"}
+          {loading ? (
+            <>
+              <svg className="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 12a9 9 0 11-6.2-8.6" strokeLinecap="round" />
+              </svg>
+              Scoring...
+            </>
+          ) : (
+            "Get score"
+          )}
         </button>
       </form>
 
       {result && (
-        <div className={`result ${result.risk_band}`}>
-          Score: <strong>{result.score}</strong> — Risk band: <strong>{result.risk_band}</strong>
+        <div className={`result ${result.risk_band}`} aria-live="polite">
+          <ScoreGauge score={result.score} band={result.risk_band} />
         </div>
       )}
-      {error && <div className="error">{error}</div>}
+
+      {error && (
+        <div className="error" role="alert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v6" strokeLinecap="round" />
+            <circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none" />
+          </svg>
+          <span>{error}</span>
+        </div>
+      )}
     </div>
   );
 }
