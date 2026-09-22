@@ -1,11 +1,10 @@
 variable "create_oidc_provider" {
   type        = bool
-  default     = false
+  default     = true
   description = <<-EOT
     An AWS account can only have one OIDC provider for token.actions.githubusercontent.com.
-    Default is false because this stack is expected to share an account with other GitHub
-    OIDC-based projects (e.g. risk-api), which already created the provider. Set to true
-    only if this is the first GitHub-OIDC stack in the account.
+    Default is true because this is the first GitHub-OIDC stack in the account. Set to
+    false if a future stack (e.g. risk-api) shares this account and already created it.
   EOT
 }
 
@@ -45,8 +44,12 @@ data "aws_iam_policy_document" "github_actions_assume" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      # GitHub's sub claim carries immutable owner and repo IDs: repo:<owner>@<owner-id>/<repo>@<repo-id>:ref:...
-      values = ["repo:ovidiulazarescu@69583998/risk-scoring-app@1381166374:ref:refs/heads/main"]
+      # GitHub only emits the @owner-id/@repo-id form when subject-claim customization
+      # is enabled on the repo, so accept either shape of the same repo+branch subject.
+      values = [
+        "repo:ovidiulazarescu/risk-scoring-app:ref:refs/heads/main",
+        "repo:ovidiulazarescu@69583998/risk-scoring-app@1381166374:ref:refs/heads/main",
+      ]
     }
   }
 }
