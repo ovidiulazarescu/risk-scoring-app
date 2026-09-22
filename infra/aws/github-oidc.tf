@@ -44,12 +44,8 @@ data "aws_iam_policy_document" "github_actions_assume" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      # GitHub only emits the @owner-id/@repo-id form when subject-claim customization
-      # is enabled on the repo, so accept either shape of the same repo+branch subject.
-      values = [
-        "repo:ovidiulazarescu/risk-scoring-app:ref:refs/heads/main",
-        "repo:ovidiulazarescu@69583998/risk-scoring-app@1381166374:ref:refs/heads/main",
-      ]
+      # GitHub's sub claim carries immutable owner and repo IDs: repo:<owner>@<owner-id>/<repo>@<repo-id>:ref:...
+      values = ["repo:ovidiulazarescu@69583998/risk-scoring-app@1381166374:ref:refs/heads/main"]
     }
   }
 }
@@ -78,9 +74,35 @@ resource "aws_iam_role_policy" "deployer_ecs" {
         Resource = "*"
       },
       {
-        Sid      = "Ec2Describe"
-        Effect   = "Allow"
-        Action   = ["ec2:DescribeVpcs", "ec2:DescribeSubnets", "ec2:DescribeSecurityGroups"]
+        Sid    = "Ec2Describe"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSecurityGroupRules",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeAccountAttributes",
+          "ec2:DescribeInternetGateways",
+          "ec2:DescribeTags"
+        ]
+        Resource = "*"
+      },
+      {
+        # EC2 has no resource-level scoping for security group creation, so these stay on "*"
+        Sid    = "Ec2SecurityGroups"
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateSecurityGroup",
+          "ec2:DeleteSecurityGroup",
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress",
+          "ec2:CreateTags",
+          "ec2:DeleteTags"
+        ]
         Resource = "*"
       },
       {
