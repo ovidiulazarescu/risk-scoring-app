@@ -71,11 +71,10 @@ AWS credentials for the one-time setup below.
    `token.actions.githubusercontent.com`. `infra/aws/github-oidc.tf` defaults to reusing an existing
    one (`create_oidc_provider = false`). If this is the first GitHub-OIDC project in the account, pass
    `-var="create_oidc_provider=true"` on the bootstrap `terraform apply` below instead.
-3. Once the GitHub repo exists, get its numeric ID and set it in `infra/aws/github-oidc.tf`
-   (the `sub` condition currently has a `REPLACE_WITH_REPO_ID` placeholder):
-   ```bash
-   curl -s https://api.github.com/repos/ovidiulazarescu/risk-scoring-app | grep '"id"'
-   ```
+3. The GitHub repo ID is already filled into the `sub` condition in `infra/aws/github-oidc.tf`
+   (`1381166374`). If the repo is ever deleted and recreated, the ID changes and the trust policy
+   must be updated to match, then reapplied with
+   `terraform apply -target=aws_iam_role.github_actions_deployer`.
 4. **Bootstrap the stack** (once, from your machine): the deployer role must exist before Actions can
    assume it, and ECS needs an image in ECR before the service can start.
    ```bash
