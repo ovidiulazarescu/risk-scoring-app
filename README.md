@@ -8,10 +8,11 @@ App Runner) to try a container-on-ECS deployment instead.
 ## Layout
 
 ```
-backend/               FastAPI service (same scoring logic as risk-api)
-frontend/               React + Vite single-page form that calls the API
+backend/                FastAPI service (same scoring logic as risk-api)
+frontend/               React + Vite single-page form, with an SVG score gauge
 infra/aws-bootstrap/    Terraform: S3 bucket for Terraform state
-infra/aws/              Terraform: ECR, ECS Fargate + ALB, S3 + CloudFront, GitHub OIDC role
+infra/aws/              Terraform: ECR, ECS Fargate + ALB, S3 + CloudFront,
+                        GitHub OIDC provider + deployer role
 .github/workflows/      deploy-aws.yml
 ```
 
@@ -22,8 +23,9 @@ Browser
    |
    v
 CloudFront (single HTTPS domain, *.cloudfront.net)
-   |-- default behavior -----------> S3 bucket (built frontend, private, via OAC)
-   `-- /score, /healthz, /docs* ---> Application Load Balancer -> ECS Fargate task (FastAPI)
+   |-- default behavior ------------------> S3 bucket (built frontend, private, via OAC)
+   `-- /score*, /healthz, /docs,
+       /openapi.json, /redoc ------------> Application Load Balancer -> ECS Fargate task (FastAPI)
 ```
 
 One CloudFront distribution fronts both the static frontend and the API so the browser only ever
@@ -68,12 +70,15 @@ AWS credentials for the one-time setup below.
    cd infra/aws-bootstrap && terraform init && terraform apply
    ```
 2. **GitHub OIDC provider**: an AWS account can only have one OIDC provider for
-   `token.actions.githubusercontent.com`. `infra/aws/github-oidc.tf` defaults to reusing an existing
-   one (`create_oidc_provider = false`). If this is the first GitHub-OIDC project in the account, pass
-   `-var="create_oidc_provider=true"` on the bootstrap `terraform apply` below instead.
-3. The GitHub repo ID is already filled into the `sub` condition in `infra/aws/github-oidc.tf`
-   (`1381166374`). If the repo is ever deleted and recreated, the ID changes and the trust policy
-   must be updated to match, then reapplied with
+   `token.actions.githubusercontent.com`. This stack creates and owns it
+   (`create_oidc_provider` defaults to `true`). If the account already has one from another project
+   (e.g. risk-api), pass `-var="create_oidc_provider=false"` so Terraform looks the existing one up
+   instead of failing with `EntityAlreadyExists`.
+3. The GitHub owner and repo IDs are already filled into the `sub` condition in
+   `infra/aws/github-oidc.tf`. GitHub issues the **immutable-ID** form of the subject claim
+   (`repo:<owner>@<owner-id>/<repo>@<repo-id>:ref:refs/heads/main`), not the plain
+   `repo:<owner>/<repo>:ref:...` form, and the trust policy has to match it exactly. If the repo is
+   ever deleted and recreated the IDs change, so update the condition and reapply with
    `terraform apply -target=aws_iam_role.github_actions_deployer`.
 4. **Bootstrap the stack** (once, from your machine): the deployer role must exist before Actions can
    assume it, and ECS needs an image in ECR before the service can start.
@@ -96,16 +101,25 @@ AWS credentials for the one-time setup below.
    ```
 5. In the GitHub repo, add a repository **variable** named `AWS_ACCOUNT_ID` with your account ID
    (Settings > Secrets and variables > Actions > Variables).
-6. **Generate the frontend lockfile once**, so CI's `npm ci` has something to install from:
+6. *Optional* — **pin frontend installs**. There is no `frontend/package-lock.json`, so CI runs
+   `npm install` and resolves the `^` ranges in `package.json` fresh on every run. To pin them,
+   generate a lockfile, commit it, and change the workflow's `npm install` back to `npm ci`:
    ```bash
    cd frontend && npm install
    ```
-   Commit the resulting `package-lock.json`.
 7. Push to `main`. The workflow builds and pushes the backend image, runs `terraform apply`, then
    builds the frontend and syncs it to S3, invalidating CloudFront. The app URL is the
    `cloudfront_domain_name` Terraform output (`https://<id>.cloudfront.net`).
 
 Notes:
+- **CI cannot repair its own credentials.** The workflow assumes the deployer role *before* it runs
+  `terraform apply`, so any change to that role's trust policy or IAM permissions has to be applied
+  from your machine first — otherwise every run keeps failing against the old config. Apply those
+  with `-target` rather than a bare `terraform apply`, since the ECS service waits for steady state
+  against an image tag that may not exist yet.
+- When debugging OIDC, note that AWS returns the same `Not authorized to perform
+  sts:AssumeRoleWithWebIdentity` whether the trust policy rejected the token *or* the role doesn't
+  exist — so a trust-policy change that appears to do nothing may mean the role was never created.
 - ECS Fargate has no true scale-to-zero (desired count is 1, same tradeoff App Runner has vs. Cloud Run).
 - The `/score` endpoint is public and unauthenticated, same as risk-api.
 - No custom domain is configured; CloudFront's default `*.cloudfront.net` certificate is used.
