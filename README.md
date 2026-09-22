@@ -3,7 +3,7 @@
 A small FastAPI risk-scoring service with a React frontend, deployed to **AWS ECS Fargate + CloudFront**
 by Terraform, and shipped by GitHub Actions using keyless OIDC auth. Forked from
 [risk-api](https://github.com/ovidiulazarescu/risk-api) (which runs the same API on Cloud Run and
-App Runner) to try a container-on-ECS deployment instead.
+App Runner).
 
 ## Layout
 
@@ -32,10 +32,7 @@ One CloudFront distribution fronts both the static frontend and the API so the b
 talks to one HTTPS origin — the frontend calls relative paths (`fetch("/score")`), so there's no CORS
 and no mixed-content issue even though the ALB itself only listens on HTTP.
 
-This is the Terraform equivalent of what **ECS Express Mode** sets up for you through the console/CLI
-wizard (VPC-less quick start, Fargate service, load balancer, public URL). Terraform doesn't expose a
-dedicated "Express Mode" resource, so `infra/aws/main.tf` builds the same shape by hand: default VPC,
-security groups, ALB, target group, ECS cluster/service/task definition.
+Builds default VPC, security groups, ALB, target group, ECS cluster/service/task definition.
 
 ## Run locally
 
@@ -60,11 +57,11 @@ Open the printed Vite URL (usually `http://localhost:5173`).
 
 ## Deploy to AWS
 
-Region: `eu-central-1`, same account convention as risk-api. Requires Terraform >= 1.12.2 and admin
+Requires Terraform >= 1.12.2 and admin
 AWS credentials for the one-time setup below.
 
 1. **State bucket**: if this AWS account already has a `tf-state-<account-id>` bucket from another
-   project (e.g. risk-api), skip this step and reuse it — state keys are per-project
+   project, skip this step and reuse it — state keys are per-project
    (`risk-scoring-app/terraform.tfstate`). Otherwise:
    ```bash
    cd infra/aws-bootstrap && terraform init && terraform apply
@@ -103,7 +100,7 @@ AWS credentials for the one-time setup below.
    (Settings > Secrets and variables > Actions > Variables).
 6. *Optional* — **pin frontend installs**. There is no `frontend/package-lock.json`, so CI runs
    `npm install` and resolves the `^` ranges in `package.json` fresh on every run. To pin them,
-   generate a lockfile, commit it, and change the workflow's `npm install` back to `npm ci`:
+   generate a lockfile, commit it, and change the workflow's `npm install` to `npm ci`:
    ```bash
    cd frontend && npm install
    ```
@@ -120,8 +117,7 @@ Notes:
 - When debugging OIDC, note that AWS returns the same `Not authorized to perform
   sts:AssumeRoleWithWebIdentity` whether the trust policy rejected the token *or* the role doesn't
   exist — so a trust-policy change that appears to do nothing may mean the role was never created.
-- ECS Fargate has no true scale-to-zero (desired count is 1, same tradeoff App Runner has vs. Cloud Run).
-- The `/score` endpoint is public and unauthenticated, same as risk-api.
+- The `/score` endpoint is public and unauthenticated.
 - No custom domain is configured; CloudFront's default `*.cloudfront.net` certificate is used.
 
 ## API
