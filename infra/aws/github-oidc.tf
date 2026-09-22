@@ -78,6 +78,7 @@ resource "aws_iam_role_policy" "deployer_ecs" {
         Effect = "Allow"
         Action = [
           "ec2:DescribeVpcs",
+          "ec2:DescribeVpcAttribute",
           "ec2:DescribeSubnets",
           "ec2:DescribeSecurityGroups",
           "ec2:DescribeSecurityGroupRules",
@@ -116,6 +117,13 @@ resource "aws_iam_role_policy" "deployer_ecs" {
         Effect   = "Allow"
         Action   = ["logs:*"]
         Resource = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/risk-scoring-app*"
+      },
+      {
+        # DescribeLogGroups has no resource-level scoping, so it cannot be pinned to the log group above
+        Sid      = "LogsDiscover"
+        Effect   = "Allow"
+        Action   = ["logs:DescribeLogGroups"]
+        Resource = "*"
       },
       {
         Sid    = "FrontendBucket"
@@ -178,7 +186,8 @@ resource "aws_iam_role_policy" "deployer_terraform" {
         Resource = [
           aws_iam_role.ecs_task_execution.arn,
           aws_iam_role.ecs_task.arn,
-          aws_iam_role.github_actions_deployer.arn
+          aws_iam_role.github_actions_deployer.arn,
+          local.github_oidc_provider_arn
         ]
       }
     ]
